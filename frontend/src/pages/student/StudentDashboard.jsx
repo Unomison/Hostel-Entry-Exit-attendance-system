@@ -69,6 +69,7 @@ const StudentDashboard = () => {
             <div className="flex-1">
               <h2 className="text-white font-semibold text-lg">{user?.name}</h2>
               <p className="text-slate-400 text-sm">{user?.rollNo}</p>
+              <p className="text-slate-400 text-xs">📱 {user?.phone}</p>
               <p className="text-slate-400 text-sm">
                 Block {user?.hostelBlock} — Room {user?.roomNo}
               </p>

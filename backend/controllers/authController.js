@@ -13,7 +13,6 @@ const registerStudent = async (req, res) => {
   try {
     const { name, email, password, rollNo, phone, hostelBlock, roomNo, photo } = req.body;
 
-    // Validate all required fields
     if (!name || !email || !password || !rollNo || !phone || !hostelBlock || !roomNo || !photo) {
       return res.status(400).json({
         success: false,
@@ -21,7 +20,6 @@ const registerStudent = async (req, res) => {
       });
     }
 
-    // Validate password length
     if (password.length < 6) {
       return res.status(400).json({
         success: false,
@@ -29,7 +27,6 @@ const registerStudent = async (req, res) => {
       });
     }
 
-    // Validate phone number
     if (!/^[6-9]\d{9}$/.test(phone)) {
       return res.status(400).json({
         success: false,
@@ -37,7 +34,6 @@ const registerStudent = async (req, res) => {
       });
     }
 
-    // Check if email already exists
     const emailExists = await Student.findOne({ email: email.toLowerCase() });
     if (emailExists) {
       return res.status(400).json({
@@ -46,7 +42,6 @@ const registerStudent = async (req, res) => {
       });
     }
 
-    // Check if roll number already exists
     const rollExists = await Student.findOne({ rollNo: rollNo.toUpperCase() });
     if (rollExists) {
       return res.status(400).json({
@@ -55,9 +50,9 @@ const registerStudent = async (req, res) => {
       });
     }
 
-    // Upload photo to Cloudinary
     let photoUrl = '';
     let photoPublicId = '';
+
     try {
       const uploadResult = await uploadBase64Image(photo, 'hostel-students');
       photoUrl = uploadResult.url;
@@ -69,8 +64,6 @@ const registerStudent = async (req, res) => {
       });
     }
 
-    // Create the student
-    // Password will be hashed automatically by the pre-save hook in model
     const student = await Student.create({
       name: name.trim(),
       email: email.toLowerCase().trim(),
@@ -94,6 +87,7 @@ const registerStudent = async (req, res) => {
         rollNo: student.rollNo,
       },
     });
+
   } catch (error) {
     console.error('Registration error:', error);
     res.status(500).json({
@@ -128,61 +122,74 @@ const login = async (req, res) => {
 
     let user = null;
 
-    // Find user based on role
+    // 🔹 STEP 1 — Find user (NO isActive filter)
     if (role === 'student') {
-      user = await Student.findOne({
-        email: email.toLowerCase(),
-        isActive: true,
-      }).select('+password');
+      user = await Student.findOne({ email: email.toLowerCase() }).select('+password');
 
       if (!user) {
-        return res.status(401).json({
+        return res.status(404).json({
           success: false,
-          message: 'No active student found with this email',
+          message: 'No student found with this email',
         });
       }
+
+      if (!user.isActive) {
+        return res.status(403).json({
+          success: false,
+          message: 'Your account is deactivated. Contact admin.',
+        });
+      }
+
     } else if (role === 'guard') {
-      user = await Guard.findOne({
-        email: email.toLowerCase(),
-        isActive: true,
-      }).select('+password');
+      user = await Guard.findOne({ email: email.toLowerCase() }).select('+password');
 
       if (!user) {
-        return res.status(401).json({
+        return res.status(404).json({
           success: false,
-          message: 'No active guard found with this email',
+          message: 'No guard found with this email',
         });
       }
 
-      // Update last login time for guard
+      if (!user.isActive) {
+        return res.status(403).json({
+          success: false,
+          message: 'Your account has been deactivated by admin.',
+        });
+      }
+
       await Guard.findByIdAndUpdate(user._id, { lastLogin: new Date() });
+
     } else if (role === 'admin') {
-      user = await Admin.findOne({
-        email: email.toLowerCase(),
-        isActive: true,
-      }).select('+password');
+      user = await Admin.findOne({ email: email.toLowerCase() }).select('+password');
 
       if (!user) {
-        return res.status(401).json({
+        return res.status(404).json({
           success: false,
-          message: 'No active admin found with this email',
+          message: 'No admin found with this email',
+        });
+      }
+
+      if (!user.isActive) {
+        return res.status(403).json({
+          success: false,
+          message: 'Admin account is inactive.',
         });
       }
     }
 
-    // Verify password
+    // 🔹 STEP 2 — Password check
     const isMatch = await user.comparePassword(password);
+
     if (!isMatch) {
       return res.status(401).json({
         success: false,
-        message: 'Incorrect password',
+        message: 'Email or password is incorrect',
       });
     }
 
-    // Generate JWT token
+    // 🔹 STEP 3 — Generate token
     const token = generateToken(user._id, role);
 
-    // Build response data based on role
     let userData = {
       id: user._id,
       name: user.name,
@@ -210,6 +217,7 @@ const login = async (req, res) => {
       token,
       user: userData,
     });
+
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({
@@ -221,12 +229,9 @@ const login = async (req, res) => {
 
 // ─────────────────────────────────────────────
 // @route   GET /api/auth/me
-// @desc    Get current logged in user profile
-// @access  Private (all roles)
 // ─────────────────────────────────────────────
 const getMe = async (req, res) => {
   try {
-    // req.user is set by the protect middleware
     res.status(200).json({
       success: true,
       user: {
@@ -244,8 +249,6 @@ const getMe = async (req, res) => {
 
 // ─────────────────────────────────────────────
 // @route   POST /api/auth/change-password
-// @desc    Change student password
-// @access  Private (student only)
 // ─────────────────────────────────────────────
 const changePassword = async (req, res) => {
   try {
@@ -272,8 +275,8 @@ const changePassword = async (req, res) => {
       });
     }
 
-    // Get student with password field (normally excluded)
     const student = await Student.findById(req.user._id).select('+password');
+
     if (!student) {
       return res.status(404).json({
         success: false,
@@ -281,8 +284,8 @@ const changePassword = async (req, res) => {
       });
     }
 
-    // Verify current password
     const isMatch = await student.comparePassword(currentPassword);
+
     if (!isMatch) {
       return res.status(400).json({
         success: false,
@@ -290,7 +293,6 @@ const changePassword = async (req, res) => {
       });
     }
 
-    // Update password — pre-save hook will hash it automatically
     student.password = newPassword;
     await student.save();
 
@@ -298,6 +300,7 @@ const changePassword = async (req, res) => {
       success: true,
       message: 'Password changed successfully',
     });
+
   } catch (error) {
     console.error('Change password error:', error);
     res.status(500).json({

@@ -12,18 +12,25 @@ const app = express();
 // ── CORS ──────────────────────────────────────────────────────
 app.use(cors({
   origin: function (origin, callback) {
-    // Allow requests with no origin (mobile apps, curl, etc.)
+    // Allow requests with no origin (mobile apps, Postman, etc.)
     if (!origin) return callback(null, true);
-    
-    // Allow localhost
-    if (origin.includes('localhost')) return callback(null, true);
-    
-    // Allow any ngrok URL
+
+    const allowedOrigins = [
+      'http://localhost:5173',
+      'http://localhost:3000',
+      process.env.FRONTEND_URL,
+    ].filter(Boolean); // Remove undefined values
+
+    // Allow any ngrok URL (for development)
     if (origin.includes('ngrok')) return callback(null, true);
-    
-    // Allow your specific frontend URL from .env
-    if (origin === process.env.FRONTEND_URL) return callback(null, true);
-    
+
+    // Allow any vercel URL (for production)
+    if (origin.includes('vercel.app')) return callback(null, true);
+
+    // Allow explicitly listed origins
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+
+    console.log('CORS blocked origin:', origin);
     callback(new Error('Not allowed by CORS'));
   },
   credentials: true,
@@ -116,6 +123,10 @@ app.use((err, req, res, next) => {
     message: err.message || 'Internal server error',
   });
 });
+
+// Keep Render from sleeping (production only)
+const keepAlive = require('./utils/keepAlive');
+keepAlive(process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`);
 
 // ── Start Server ──────────────────────────────────────────────
 const PORT = process.env.PORT || 5000;

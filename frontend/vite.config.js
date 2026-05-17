@@ -9,10 +9,7 @@ export default defineConfig({
   ],
   server: {
     host: true,
-    allowedHosts: [
-      'subdilated-illuminatedly-finley.ngrok-free.dev',
-      'localhost',
-    ],
+    allowedHosts: 'all',
     proxy: {
       '/api': {
         target: 'http://localhost:5000',

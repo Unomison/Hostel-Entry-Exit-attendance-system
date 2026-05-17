@@ -84,16 +84,20 @@ const getAuditLogs = async (req, res) => {
     }
 
     // Filter by date range
-    if (req.query.date) {
-      const filterDate = new Date(req.query.date);
-      const nextDay = new Date(filterDate);
-      nextDay.setDate(nextDay.getDate() + 1);
-      query.scannedAt = {
-        $gte: filterDate,
-        $lt: nextDay,
-      };
-    }
+if (req.query.date) {
+  // Parse the date string as IST (UTC+5:30)
+  // e.g. "2026-04-09" → start = 2026-04-08T18:30:00Z, end = 2026-04-09T18:30:00Z
+  const [year, month, day] = req.query.date.split('-').map(Number);
 
+  // IST midnight = UTC 18:30 of previous day
+  const istStart = new Date(Date.UTC(year, month - 1, day - 1, 18, 30, 0));
+  const istEnd = new Date(Date.UTC(year, month - 1, day, 18, 29, 59));
+
+  query.scannedAt = {
+    $gte: istStart,
+    $lte: istEnd,
+  };
+}
     // Filter by guard
     if (req.query.guardId) {
       query.guardId = req.query.guardId;
